@@ -1,0 +1,17 @@
+{
+  "name": "shelfie",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A personal library app that lives on your own phone.",
+  "type": "module",
+  "scripts": {
+    "start": "node test/dev.mjs",
+    "test": "node test/unit.mjs && node test/run.mjs",
+    "test:unit": "node test/unit.mjs",
+    "test:e2e": "node test/run.mjs"
+  },
+  "devDependencies": {
+    "@zxing/library": "^0.23.0",
+    "playwright": "^1.62.1"
+  }
+}
