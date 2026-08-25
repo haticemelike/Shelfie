@@ -291,17 +291,6 @@ export function toIsbn13(input) {
 
 function googleCountriesForIsbn(isbn) {
   const s = cleanIsbn(isbn);
-
-  // Turkish ISBN prefixes:
-  // 978-975 = older/common Turkish publishing prefix
-  // 978-625 = newer Turkish publishing prefix
-  const likelyTurkish = /^978(?:975|625)/.test(s);
-
-  return likelyTurkish ? ['TR', 'US'] : ['US', 'TR'];
-}
-
-function googleCountriesForIsbn(isbn) {
-  const s = cleanIsbn(isbn);
   const likelyTurkish = /^978(?:975|625)/.test(s);
   return likelyTurkish ? ['TR', 'US'] : ['US', 'TR'];
 }
