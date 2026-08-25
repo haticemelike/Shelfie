@@ -98,14 +98,17 @@ export function setGoogleCredentials({ key = '', user = '' } = {}) {
 
 export function hasGoogleKey() { return !!googleKey; }
 
-export function gbUrl(query, extra = '') {
-  let url = `${GB}?q=${encodeURIComponent(query)}&country=US${extra}`;
+export function gbUrl(query, extra = '', country = 'US') {
+  let url = `${GB}?q=${encodeURIComponent(query)}&country=${encodeURIComponent(country)}${extra}`;
+
   if (googleKey) {
     url += `&key=${encodeURIComponent(googleKey)}`;
-    // quotaUser partitions a PROJECT's quota between end users. Without a key
-    // there is no project, so it does nothing — only send it alongside one.
-    if (quotaUser) url += `&quotaUser=${encodeURIComponent(quotaUser)}`;
+
+    if (quotaUser) {
+      url += `&quotaUser=${encodeURIComponent(quotaUser)}`;
+    }
   }
+
   return url;
 }
 
@@ -283,6 +286,23 @@ export function toIsbn13(input) {
   for (let i = 0; i < 12; i++) sum += Number(core[i]) * (i % 2 === 0 ? 1 : 3);
   const check = (10 - (sum % 10)) % 10;
   return core + check;
+}
+
+function googleCountriesForIsbn(isbn) {
+  const s = cleanIsbn(isbn);
+
+  // Turkish ISBN prefixes:
+  // 978-975 = older/common Turkish publishing prefix
+  // 978-625 = newer Turkish publishing prefix
+  const likelyTurkish = /^978(?:975|625)/.test(s);
+
+  return likelyTurkish ? ['TR', 'US'] : ['US', 'TR'];
+}
+
+function googleCountriesForIsbn(isbn) {
+  const s = cleanIsbn(isbn);
+  const likelyTurkish = /^978(?:975|625)/.test(s);
+  return likelyTurkish ? ['TR', 'US'] : ['US', 'TR'];
 }
 
 /* ---------- genre normalisation ----------
@@ -509,6 +529,21 @@ function pick(...vals) {
   return null;
 }
 
+async function fromGoogleBooksCountries(query, countries, ctx = null) {
+  for (const country of countries) {
+    const data = await getJSON(
+      gbUrl(query, '&maxResults=5', country),
+      ctx
+    );
+
+    if (data && data.items && data.items.length) {
+      return volumeToBook(data.items[0]);
+    }
+  }
+
+  return null;
+}
+
 /**
  * Look an ISBN up in both sources and merge the results.
  * Returns null only if neither source knows the book.
@@ -516,21 +551,35 @@ function pick(...vals) {
 export async function lookupIsbn(isbnInput, ctx = null) {
   const isbn = cleanIsbn(isbnInput);
   if (!isbn) return null;
+
   const isbn13 = toIsbn13(isbn) || isbn;
 
   const [ol, gb] = await Promise.all([
     fromOpenLibrary(isbn, ctx).catch(() => null),
-    fromGoogleBooks(`isbn:${isbn}`, ctx).catch(() => null),
+    fromGoogleBooksCountries(
+      `isbn:${isbn}`,
+      googleCountriesForIsbn(isbn),
+      ctx
+    ).catch(() => null),
   ]);
+
   if (!ol && !gb) return null;
+
   const a = ol || {};
   const b = gb || {};
 
-  const rawSubjects = [...(b.rawSubjects || []), ...(a.rawSubjects || [])];
+  const rawSubjects = [
+    ...(b.rawSubjects || []),
+    ...(a.rawSubjects || [])
+  ];
 
   return {
     isbn13,
-    isbn10: pick(b.isbn10, a.isbn10, isbn.length === 10 ? isbn : null),
+    isbn10: pick(
+      b.isbn10,
+      a.isbn10,
+      isbn.length === 10 ? isbn : null
+    ),
     title: pick(a.title, b.title) || 'Untitled',
     subtitle: pick(b.subtitle, a.subtitle) || '',
     authors: pick(a.authors, b.authors) || [],
@@ -544,7 +593,9 @@ export async function lookupIsbn(isbnInput, ctx = null) {
     rawSubjects: rawSubjects.slice(0, 30),
     description: pick(b.description, a.description) || '',
     coverUrl: pick(a.coverUrl, b.coverUrl) || '',
-    source: [ol && 'openlibrary', gb && 'googlebooks'].filter(Boolean).join('+'),
+    source: [ol && 'openlibrary', gb && 'googlebooks']
+      .filter(Boolean)
+      .join('+'),
   };
 }
 
@@ -815,9 +866,13 @@ export async function probeServices() {
  */
 export function plausibleMatch(book, found) {
   if (!found) return false;
-  const norm = (s) => String(s || '').toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const norm = (s) => String(s || '')
+  .toLocaleLowerCase('tr-TR')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9çğıöşü ]/gi, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
 
   const a = norm(book.title);
   const b = norm(found.title);
