@@ -96,14 +96,15 @@ export function setGoogleCredentials({ key = '', user = '' } = {}) {
   quotaUser = String(user || '').trim();
 }
 
-export function hasGoogleKey() { return !!googleKey; }
+export function hasGoogleKey() { 
+  return !!googleKey; 
+}
 
 export function gbUrl(query, extra = '', country = 'US') {
   let url = `${GB}?q=${encodeURIComponent(query)}&country=${encodeURIComponent(country)}${extra}`;
 
   if (googleKey) {
     url += `&key=${encodeURIComponent(googleKey)}`;
-
     if (quotaUser) {
       url += `&quotaUser=${encodeURIComponent(quotaUser)}`;
     }
